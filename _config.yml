@@ -1,15 +1,20 @@
-# 替换成你的 GitHub 用户名和仓库名
+# 1. 基础信息（必填，解决 Metadata 报错）
 repository: lucerrne/lucerrne.github.io
-
-# 建议同时也加上这个，防止链接错乱
-url: "https://lucerrne.github.io" 
+url: "https://lucerrne.github.io"
 baseurl: ""
 
-# 排除不需要编译的文件，提升速度
+# 2. 排除干扰（核心：解决 vendor 报错）
+# 注意：一定要有前面的减号和空格，且路径带斜杠
 exclude:
   - vendor/
   - Gemfile
   - Gemfile.lock
   - .ruby-version
   - .github/
-  - README.md
+  - node_modules/
+
+# 3. 插件配置
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-remote-theme # 如果你有用远程主题的话
