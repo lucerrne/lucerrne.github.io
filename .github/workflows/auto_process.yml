@@ -1,25 +1,36 @@
-name: AI Photo Assistant
+name: AI Photo Assistant & Auto Deploy
+
 on:
   push:
     paths:
-      - 'assets/photos/**' # 只有当你往这个文件夹传图时才触发
+      - 'assets/photos/**' # 只有当 photos 文件夹有变动时才触发
+
+# 核心：设置并发策略，确保同一时间只有一个任务在跑，旧的会自动停止而不报错
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  analyze-and-compress:
+  analyze-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 赋予脚本修改仓库代码的权限
+      contents: write # 允许 AI 写回描述
+      pages: write    # 允许触发部署
+      id-token: write
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # 升级到 3.10 避免过时警告
+          python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install google-generativeai Pillow pyyaml # 确保安装最新包
+        run: pip install google-generativeai Pillow pyyaml
 
       - name: Run AI & Compression
         env:
@@ -31,63 +42,53 @@ jobs:
           from PIL import Image
           import yaml
 
+          # 配置 AI
           genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-          # 修正模型名称，确保使用官方推荐的完整 ID
           model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
           
-          # 确保数据文件夹存在
-          os.makedirs('_data', exist_ok=True)
-          
+          # 读取已有数据
           if os.path.exists(data_file):
               with open(data_file, 'r', encoding='utf-8') as f:
                   descriptions = yaml.safe_load(f) or {}
           else:
               descriptions = {}
 
-          processed_any = False
+          # 确保 _data 目录存在
+          os.makedirs('_data', exist_ok=True)
+
+          # 遍历照片
           for filename in os.listdir(photo_dir):
-              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and filename != ".keep":
-                  filepath = os.path.join(photo_dir, filename)
-                  
-                  # 1. 压缩图片 (原地替换)
-                  img = Image.open(filepath)
-                  if img.width > 1600 or img.height > 1600:
-                      img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
-                  img.save(filepath, "JPEG", quality=85)
+              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and filename not in descriptions:
+                  try:
+                      img_path = os.path.join(photo_dir, filename)
+                      
+                      # 1. AI 识图
+                      img = Image.open(img_path)
+                      response = model.generate_content(["请用一句话描述这张摄影作品的意境，中文，感性且有诗意。", img])
+                      descriptions[filename] = response.text.strip()
+                      print(f"Generated description for {filename}")
 
-                  # 2. AI 生成描述 (结合文件名和视觉内容)
-                  if filename not in descriptions:
-                      try:
-                          # 提取不带后缀的文件名
-                          display_name = os.path.splitext(filename)[0]
-                          
-                          # 优化后的 Prompt：要求结合文件名，增加文采
-                          prompt = f"""
-                          你是一位富有诗意的摄影评论家。
-                          这张摄影作品的文件名是：'{display_name}'。
-                          请结合这张图片的视觉内容和文件名，写一句20字以内、极具文学色彩的中文描述。
-                          要求：语言优美，意境深远，不要重复文件名，直接返回描述文字。
-                          """
-                          
-                          response = model.generate_content([prompt, img])
-                          descriptions[filename] = response.text.strip()
-                          processed_any = True
-                      except Exception as e:
-                          print(f"AI Error for {filename}: {e}")
-                          descriptions[filename] = "光影交织出的无声诗篇。"
+                      # 2. 压缩图片 (原位替换以节省空间)
+                      img.save(img_path, optimize=True, quality=80)
+                  except Exception as e:
+                      print(f"Error processing {filename}: {e}")
 
-          if processed_any:
-              with open(data_file, 'w', encoding='utf-8') as f:
-                  yaml.dump(descriptions, f, allow_unicode=True)
+          # 保存描述
+          with open(data_file, 'w', encoding='utf-8') as f:
+              yaml.dump(descriptions, f, allow_unicode=True)
           EOF
 
-      - name: Commit and Push
+      - name: Commit and Push changes
         run: |
-          git config --global user.name "AI Assistant"
-          git config --global user.email "action@github.com"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           git add .
-          git commit -m "AI processed images and updated descriptions" || exit 0
-          git push
+          git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update descriptions and compress images" && git push)
+
+      # 关键步骤：在 AI 工作完成后，手动触发 GitHub Pages 的部署
+      - name: Trigger GitHub Pages Deploy
+        uses: actions/deploy-pages@v4
+        if: success()
