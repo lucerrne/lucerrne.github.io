@@ -52,7 +52,7 @@ jobs:
 
           # 2. 核心 API 地址 (确保使用 v1 正式版)
           # 注意：如果下面仍然 404，请根据上面打印出来的列表修改这里的 gemini-1.5-flash
-          api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+          api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
