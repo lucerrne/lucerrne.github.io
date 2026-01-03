@@ -2,30 +2,32 @@
 layout: default
 ---
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>我的摄影空间</title>
+    <title>我的摄影集</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #fafafa; }
-        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 20px; }
-        .photo-item { background: white; padding: 10px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        img { width: 100%; border-radius: 5px; height: 200px; object-fit: cover; }
-        .desc { margin-top: 10px; color: #555; font-size: 0.9em; font-style: italic; }
+        body { font-family: -apple-system, sans-serif; background: #f0f0f0; text-align: center; margin: 0; }
+        h1 { margin-top: 50px; letter-spacing: 5px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 30px; padding: 40px; }
+        .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.05); transition: 0.3s; }
+        .card:hover { transform: translateY(-5px); }
+        img { width: 100%; height: 250px; object-fit: cover; display: block; }
+        .info { padding: 20px; color: #444; font-size: 15px; line-height: 1.6; }
     </style>
 </head>
 <body>
     <h1>PHOTOGRAPHY</h1>
     <p>—— 瞬间即是永恒 ——</p>
 
-    <div class="photo-grid">
+    <div class="grid">
         {% for file in site.static_files %}
             {% if file.path contains '/assets/photos/' %}
-                <div class="photo-item">
-                    <img src="{{ file.path | relative_url }}" alt="作品">
-                    <div class="desc">
+                <div class="card">
+                    <img src="{{ file.path | relative_url }}">
+                    <div class="info">
                         {% assign photo_name = file.path | split: "/" | last %}
-                        {{ site.data.descriptions[photo_name] | default: "正在感悟这张照片..." }}
+                        {{ site.data.descriptions[photo_name] | default: "AI 正在感悟这张照片..." }}
                     </div>
                 </div>
             {% endif %}
