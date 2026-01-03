@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'assets/photos/**'
-  workflow_dispatch: # 允许你手动点击运行
+  workflow_dispatch: # 允许手动运行
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,10 +27,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11' # 升级到 3.11 以支持最新库
 
       - name: Install Dependencies
-        run: pip install google-generativeai Pillow pyyaml
+        run: |
+          pip install --upgrade google-generativeai Pillow pyyaml # 强制更新库版本
 
       - name: Run AI & Compression
         env:
@@ -42,7 +43,10 @@ jobs:
           from PIL import Image
           import yaml
 
+          # 强制配置
           genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          
+          # 使用最稳健的模型名称
           model = genai.GenerativeModel('gemini-1.5-flash')
 
           photo_dir = 'assets/photos'
@@ -56,20 +60,28 @@ jobs:
 
           os.makedirs('_data', exist_ok=True)
 
+          processed_any = False
           for filename in os.listdir(photo_dir):
               if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and filename not in descriptions:
                   try:
                       img_path = os.path.join(photo_dir, filename)
                       img = Image.open(img_path)
+                      
+                      # AI 识图逻辑
                       response = model.generate_content(["请用一句话描述这张摄影作品的意境，中文，感性且有诗意。", img])
+                      
                       descriptions[filename] = response.text.strip()
-                      print(f"Generated description for {filename}")
+                      print(f"Successfully generated description for {filename}")
+                      
+                      # 压缩图片
                       img.save(img_path, optimize=True, quality=80)
+                      processed_any = True
                   except Exception as e:
                       print(f"Error processing {filename}: {e}")
 
-          with open(data_file, 'w', encoding='utf-8') as f:
-              yaml.dump(descriptions, f, allow_unicode=True)
+          if processed_any:
+              with open(data_file, 'w', encoding='utf-8') as f:
+                  yaml.dump(descriptions, f, allow_unicode=True)
           EOF
 
       - name: Commit and Push changes
@@ -79,19 +91,15 @@ jobs:
           git add .
           git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update descriptions" && git push)
 
-      # --- 关键修复步骤：打包网页文件 ---
-     # --- 关键修复步骤：打包网页文件 ---
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # 新增：必须手动调用 Jekyll 把 Liquid 标签翻译成 HTML
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
           source: ./
           destination: ./_site
 
-      # 修改：上传的是 Jekyll 编译后的结果（_site 目录）
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
