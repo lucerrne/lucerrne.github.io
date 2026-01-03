@@ -27,27 +27,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # 强制使用 3.11
+          python-version: '3.11'
 
       - name: Install Dependencies
-        run: |
-          pip install --upgrade pip
-          pip install google-genai Pillow pyyaml # 核心改变：安装最新一代 SDK
+        run: pip install Pillow pyyaml requests # 换成最基础的请求库
 
       - name: Run AI & Compression
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python <<EOF
-          import os
-          from google import genai # 使用全新 SDK
+          import os, base64, requests, yaml, time
           from PIL import Image
-          import yaml
-          import time
 
-          # 1. 初始化最新的 Client，不再手动 configure，新 SDK 自动处理 API 路由
-          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
-          model_id = "gemini-1.5-flash"
+          api_key = os.environ['GEMINI_API_KEY']
+          # 核心修复：强制使用 v1 正式版接口路径，彻底绕过 v1beta
+          api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
@@ -59,29 +54,43 @@ jobs:
               descriptions = {}
 
           os.makedirs('_data', exist_ok=True)
-
           processed_any = False
+
           for filename in os.listdir(photo_dir):
               if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and filename not in descriptions:
                   try:
                       img_path = os.path.join(photo_dir, filename)
-                      img = Image.open(img_path)
-                      
-                      # 2. 采用新版 SDK 语法：不再使用 GenerativeModel 这种旧写法
-                      response = client.models.generate_content(
-                          model=model_id,
-                          contents=["请用一句话描述这张摄影作品的意境，中文，感性且有诗意。", img]
-                      )
-                      
-                      descriptions[filename] = response.text.strip()
-                      print(f"✅ 成功生成文案: {filename}")
-                      
                       # 压缩图片
+                      img = Image.open(img_path)
                       img.save(img_path, optimize=True, quality=80)
-                      processed_any = True
-                      time.sleep(2) # 礼貌间歇，适配免费 Key 的频率
+                      
+                      # 将图片转为 Base64
+                      with open(img_path, "rb") as image_file:
+                          encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+                      # 直接发送 REST 请求
+                      payload = {
+                          "contents": [{
+                              "parts": [
+                                  {"text": "请用一句话描述这张摄影作品的意境，中文，感性且有诗意。"},
+                                  {"inline_data": {"mime_type": "image/jpeg", "data": encoded_string}}
+                              ]
+                          }]
+                      }
+                      
+                      response = requests.post(api_url, json=payload)
+                      result = response.json()
+                      
+                      if 'candidates' in result:
+                          descriptions[filename] = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                          print(f"✅ 成功: {filename}")
+                          processed_any = True
+                      else:
+                          print(f"❌ API 报错: {result}")
+                      
+                      time.sleep(3) # 避开频率限制
                   except Exception as e:
-                      print(f"❌ 处理 {filename} 失败: {e}")
+                      print(f"❌ 错误 {filename}: {e}")
 
           if processed_any:
               with open(data_file, 'w', encoding='utf-8') as f:
