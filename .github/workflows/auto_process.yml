@@ -1,0 +1,81 @@
+name: AI Photo Assistant
+on:
+  push:
+    paths:
+      - 'assets/photos/**' # 只有当你往这个文件夹传图时才触发
+
+jobs:
+  analyze-and-compress:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 赋予脚本修改仓库代码的权限
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install google-generativeai Pillow pyyaml
+
+      - name: Run AI & Compression
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python <<EOF
+          import os
+          import google.generativeai as genai
+          from PIL import Image
+          import yaml
+
+          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          model = genai.GenerativeModel('gemini-1.5-flash')
+
+          photo_dir = 'assets/photos'
+          data_file = '_data/descriptions.yml'
+          
+          # 确保数据文件夹存在
+          os.makedirs('_data', exist_ok=True)
+          
+          if os.path.exists(data_file):
+              with open(data_file, 'r', encoding='utf-8') as f:
+                  descriptions = yaml.safe_load(f) or {}
+          else:
+              descriptions = {}
+
+          processed_any = False
+          for filename in os.listdir(photo_dir):
+              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and filename != ".keep":
+                  filepath = os.path.join(photo_dir, filename)
+                  
+                  # 1. 压缩图片 (原地替换)
+                  img = Image.open(filepath)
+                  if img.width > 1600 or img.height > 1600:
+                      img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                  img.save(filepath, "JPEG", quality=85)
+
+                  # 2. AI 生成描述 (仅针对新照片)
+                  if filename not in descriptions:
+                      try:
+                          response = model.generate_content(["这张图是一个摄影网站的作品，请给它写一句15字以内的感性中文描述，只要纯文字，不要符号。", img])
+                          descriptions[filename] = response.text.strip()
+                          processed_any = True
+                      except Exception as e:
+                          print(f"AI Error for {filename}: {e}")
+                          descriptions[filename] = "光影流转的瞬间"
+
+          if processed_any:
+              with open(data_file, 'w', encoding='utf-8') as f:
+                  yaml.dump(descriptions, f, allow_unicode=True)
+          EOF
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "AI Assistant"
+          git config --global user.email "action@github.com"
+          git add .
+          git commit -m "AI processed images and updated descriptions" || exit 0
+          git push
