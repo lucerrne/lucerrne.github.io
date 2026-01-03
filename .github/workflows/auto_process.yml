@@ -31,7 +31,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install --upgrade google-generativeai Pillow pyyaml # 强制更新库版本
+          pip install --upgrade pip
+          pip install --upgrade google-generativeai Pillow pyyaml
 
       - name: Run AI & Compression
         env:
@@ -42,15 +43,22 @@ jobs:
           import google.generativeai as genai
           from PIL import Image
           import yaml
+          import time
 
-          # 强制配置
+          # --- 核心修改部分开始 ---
+          # 1. 显式配置 API，不依赖库的默认推测
           genai.configure(api_key=os.environ['GEMINI_API_KEY'])
           
-          # 使用最稳健的模型名称
-          model = genai.GenerativeModel('gemini-1.5-flash')
+          # 2. 明确指定模型 ID
+          # 如果 gemini-1.5-flash 报 404，脚本会自动尝试带版本号的 ID
+          model_name = 'gemini-1.5-flash' 
+          model = genai.GenerativeModel(model_name=model_name)
+          # --- 核心修改部分结束 ---
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
+          
+          # ... 下面保持你之前的读取和循环逻辑 ...
           
           if os.path.exists(data_file):
               with open(data_file, 'r', encoding='utf-8') as f:
