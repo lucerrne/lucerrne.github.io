@@ -1,0 +1,81 @@
+---
+layout: default
+---
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的摄影集</title>
+    <style>
+        /* 页面背景及基础设置 */
+        body { 
+            margin: 0; 
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: #ffffff;
+            color: #333;
+        }
+        header { text-align: center; padding: 60px 20px; }
+        header h1 { font-weight: 200; font-size: 2.5em; letter-spacing: 5px; text-transform: uppercase; }
+
+        /* 响应式瀑布流核心代码 */
+        .waterfall-container {
+            width: 90%;
+            max-width: 1400px;
+            margin: 0 auto;
+            column-count: 3; /* 默认电脑端 3 列 */
+            column-gap: 20px;
+            padding-bottom: 50px;
+        }
+
+        .photo-item {
+            break-inside: avoid; /* 防止图片跨列断开 */
+            margin-bottom: 20px;
+            overflow: hidden;
+            border-radius: 4px; /* 轻微圆角，更有质感 */
+            transition: all 0.3s ease;
+        }
+
+        .photo-item img {
+            width: 100%;
+            height: auto; /* 保持原图比例 */
+            display: block;
+            filter: grayscale(20%); /* 稍微降低饱和度，增加高级感 */
+            transition: all 0.5s ease;
+        }
+
+        /* 悬停效果 */
+        .photo-item:hover { transform: translateY(-5px); }
+        .photo-item:hover img { filter: grayscale(0%); transform: scale(1.03); }
+
+        /* 响应式布局：根据屏幕宽度自动调整列数 */
+        @media (max-width: 1000px) { .waterfall-container { column-count: 2; } }
+        @media (max-width: 600px) { 
+            .waterfall-container { column-count: 1; }
+            header h1 { font-size: 1.8em; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Photography</h1>
+    <p>—— 瞬间即是永恒 ——</p>
+</header>
+
+<div class="waterfall-container">
+    {% for file in site.static_files %}
+        {% if file.path contains '/assets/photos/' %}
+            {% if file.extname == '.jpg' or file.extname == '.jpeg' or file.extname == '.png' or file.extname == '.JPG' or file.extname == '.JPEG' %}
+            <div class="photo-item">
+                <a href="{{ site.baseurl }}{{ file.path }}" target="_blank">
+                    <img src="{{ site.baseurl }}{{ file.path }}" loading="lazy" alt="Photography">
+                </a>
+            </div>
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+</div>
+
+</body>
+</html>
