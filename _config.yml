@@ -1,0 +1,14 @@
+# 替换成你的 GitHub 用户名和仓库名
+repository: lucerrne/lucerrne.github.io
+
+# 建议同时也加上这个，防止链接错乱
+url: "https://lucerrne.github.io" 
+baseurl: ""
+
+# 排除不需要编译的文件，提升速度
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - .ruby-version
+  - node_modules
+  - .github
