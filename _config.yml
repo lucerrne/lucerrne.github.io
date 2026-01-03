@@ -7,8 +7,9 @@ baseurl: ""
 
 # 排除不需要编译的文件，提升速度
 exclude:
+  - vendor/
   - Gemfile
   - Gemfile.lock
   - .ruby-version
-  - node_modules
-  - .github
+  - .github/
+  - README.md
