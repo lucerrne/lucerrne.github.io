@@ -41,7 +41,7 @@ jobs:
           from PIL import Image
 
           api_key = os.environ['GEMINI_API_KEY']
-          # 使用你 Key 权限内最强的 2.5 版本
+          # 使用 Gemini 2.5 Flash 确保最强的中文理解力
           api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
@@ -57,8 +57,13 @@ jobs:
           processed_any = False
 
           for filename in os.listdir(photo_dir):
-              # 如果该文件还没有描述，或者描述还是旧的字符串格式，则重新生成
-              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and (filename not in descriptions or isinstance(descriptions[filename], str)):
+              # 逻辑：如果没有描述，或者描述是字典格式（旧双语格式），则重新生成纯中文
+              needs_process = False
+              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                  if filename not in descriptions or isinstance(descriptions[filename], dict):
+                      needs_process = True
+
+              if needs_process:
                   try:
                       img_path = os.path.join(photo_dir, filename)
                       img = Image.open(img_path)
@@ -67,11 +72,11 @@ jobs:
                       with open(img_path, "rb") as image_file:
                           encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
-                      # 提示词优化：要求简短、双语、特定格式
+                      # 提示词：纯中文，极简意境
                       payload = {
                           "contents": [{
                               "parts": [
-                                  {"text": "请为这张摄影作品提供极简描述。第一行中文，第二行英文。每行不超过15个字。风格感性。"},
+                                  {"text": "请为这张摄影作品提供一句话描述。要求：中文，感性且有诗意，字数极简（15字以内）。"},
                                   {"inline_data": {"mime_type": "image/jpeg", "data": encoded_string}}
                               ]
                           }]
@@ -81,16 +86,11 @@ jobs:
                       result = response.json()
                       
                       if 'candidates' in result:
-                          raw_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
-                          lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
-                          
-                          if len(lines) >= 2:
-                              descriptions[filename] = {
-                                  "zh": lines[0],
-                                  "en": lines[1]
-                              }
-                              print(f"✅ 双语生成成功: {filename}")
-                              processed_any = True
+                          # 存储为纯字符串
+                          description_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                          descriptions[filename] = description_text
+                          print(f"✅ 中文文案生成成功: {filename}")
+                          processed_any = True
                       else:
                           print(f"❌ API 报错: {result}")
                       
@@ -108,7 +108,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update bilingual short descriptions" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update to pure Chinese descriptions" && git push)
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
