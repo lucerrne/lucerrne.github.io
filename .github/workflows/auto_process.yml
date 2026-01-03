@@ -1,38 +1,4 @@
-name: AI Photo Assistant & Auto Deploy
-
-on:
-  push:
-    paths:
-      - 'assets/photos/**'
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  analyze-and-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install Dependencies
-        run: pip install Pillow pyyaml requests
-
-      - name: Run AI & Compression
+- name: Run AI & Compression
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -41,7 +7,18 @@ jobs:
           from PIL import Image
 
           api_key = os.environ['GEMINI_API_KEY']
-          # 使用 Gemini 2.5 Flash 确保最强的中文理解力
+          
+          # 1. 先探测你的 Key 到底能看到哪些模型 (用于排查 404)
+          list_url = f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
+          try:
+              models_resp = requests.get(list_url).json()
+              print(f"🔍 当前 Key 可用的模型列表: {models_resp}")
+          except Exception as e:
+              print(f"❌ 探测模型失败: {e}")
+
+          # 2. 核心 API 地址 (确保使用 v1 正式版)
+          # 注意：如果下面仍然 404，请根据上面打印出来的列表修改这里的 gemini-1.5-flash
+          # 将 gemini-1.5-flash 改为 gemini-2.5-flash
           api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
@@ -57,13 +34,7 @@ jobs:
           processed_any = False
 
           for filename in os.listdir(photo_dir):
-              # 逻辑：如果没有描述，或者描述是字典格式（旧双语格式），则重新生成纯中文
-              needs_process = False
-              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-                  if filename not in descriptions or isinstance(descriptions[filename], dict):
-                      needs_process = True
-
-              if needs_process:
+              if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and filename not in descriptions:
                   try:
                       img_path = os.path.join(photo_dir, filename)
                       img = Image.open(img_path)
@@ -72,11 +43,10 @@ jobs:
                       with open(img_path, "rb") as image_file:
                           encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
-                      # 提示词：纯中文，极简意境
                       payload = {
                           "contents": [{
                               "parts": [
-                                  {"text": "请为这张摄影作品提供一句话描述。要求：中文，感性且有诗意，字数极简（15字以内）。"},
+                                  {"text": "请用一句话描述这张摄影作品的意境，中文，感性且有诗意。"},
                                   {"inline_data": {"mime_type": "image/jpeg", "data": encoded_string}}
                               ]
                           }]
@@ -86,44 +56,18 @@ jobs:
                       result = response.json()
                       
                       if 'candidates' in result:
-                          # 存储为纯字符串
-                          description_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
-                          descriptions[filename] = description_text
-                          print(f"✅ 中文文案生成成功: {filename}")
+                          descriptions[filename] = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                          print(f"✅ 成功生成描述: {filename}")
                           processed_any = True
                       else:
-                          print(f"❌ API 报错: {result}")
+                          # 这里会打印出最详细的错误原因
+                          print(f"❌ API 报错详情: {result}")
                       
-                      time.sleep(2) 
+                      time.sleep(3)
                   except Exception as e:
-                      print(f"❌ 错误 {filename}: {e}")
+                      print(f"❌ 程序执行错误 {filename}: {e}")
 
           if processed_any:
               with open(data_file, 'w', encoding='utf-8') as f:
                   yaml.dump(descriptions, f, allow_unicode=True)
           EOF
-
-      - name: Commit and Push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update to pure Chinese descriptions" && git push)
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
-        with:
-          source: ./
-          destination: ./_site
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './_site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
