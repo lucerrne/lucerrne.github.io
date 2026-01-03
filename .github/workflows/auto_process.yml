@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'assets/photos/**'
-  workflow_dispatch: # 允许手动运行
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,12 +27,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # 升级到 3.11 以支持最新库
+          python-version: '3.11' # 强制使用 3.11
 
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install --upgrade google-generativeai Pillow pyyaml
+          pip install google-genai Pillow pyyaml # 核心改变：安装最新一代 SDK
 
       - name: Run AI & Compression
         env:
@@ -40,25 +40,17 @@ jobs:
         run: |
           python <<EOF
           import os
-          import google.generativeai as genai
+          from google import genai # 使用全新 SDK
           from PIL import Image
           import yaml
           import time
 
-          # --- 核心修改部分开始 ---
-          # 1. 显式配置 API，不依赖库的默认推测
-          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-          
-          # 2. 明确指定模型 ID
-          # 如果 gemini-1.5-flash 报 404，脚本会自动尝试带版本号的 ID
-          model_name = 'gemini-1.5-flash' 
-          model = genai.GenerativeModel(model_name=model_name)
-          # --- 核心修改部分结束 ---
+          # 1. 初始化最新的 Client，不再手动 configure，新 SDK 自动处理 API 路由
+          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+          model_id = "gemini-1.5-flash"
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
-          
-          # ... 下面保持你之前的读取和循环逻辑 ...
           
           if os.path.exists(data_file):
               with open(data_file, 'r', encoding='utf-8') as f:
@@ -75,17 +67,21 @@ jobs:
                       img_path = os.path.join(photo_dir, filename)
                       img = Image.open(img_path)
                       
-                      # AI 识图逻辑
-                      response = model.generate_content(["请用一句话描述这张摄影作品的意境，中文，感性且有诗意。", img])
+                      # 2. 采用新版 SDK 语法：不再使用 GenerativeModel 这种旧写法
+                      response = client.models.generate_content(
+                          model=model_id,
+                          contents=["请用一句话描述这张摄影作品的意境，中文，感性且有诗意。", img]
+                      )
                       
                       descriptions[filename] = response.text.strip()
-                      print(f"Successfully generated description for {filename}")
+                      print(f"✅ 成功生成文案: {filename}")
                       
                       # 压缩图片
                       img.save(img_path, optimize=True, quality=80)
                       processed_any = True
+                      time.sleep(2) # 礼貌间歇，适配免费 Key 的频率
                   except Exception as e:
-                      print(f"Error processing {filename}: {e}")
+                      print(f"❌ 处理 {filename} 失败: {e}")
 
           if processed_any:
               with open(data_file, 'w', encoding='utf-8') as f:
