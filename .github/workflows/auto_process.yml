@@ -80,13 +80,22 @@ jobs:
           git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update descriptions" && git push)
 
       # --- 关键修复步骤：打包网页文件 ---
+     # --- 关键修复步骤：打包网页文件 ---
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
+      # 新增：必须手动调用 Jekyll 把 Liquid 标签翻译成 HTML
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      # 修改：上传的是 Jekyll 编译后的结果（_site 目录）
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.' # 上传整个仓库内容作为网页源文件
+          path: './_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
