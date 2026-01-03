@@ -16,10 +16,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10' # 升级到 3.10 避免过时警告
 
       - name: Install Dependencies
-        run: pip install google-generativeai Pillow pyyaml
+        run: pip install google-generativeai Pillow pyyaml # 确保安装最新包
 
       - name: Run AI & Compression
         env:
@@ -32,7 +32,8 @@ jobs:
           import yaml
 
           genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-          model = genai.GenerativeModel('gemini-1.5-flash')
+          # 修正模型名称，确保使用官方推荐的完整 ID
+          model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
