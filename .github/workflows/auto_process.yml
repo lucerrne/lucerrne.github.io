@@ -57,15 +57,26 @@ jobs:
                       img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
                   img.save(filepath, "JPEG", quality=85)
 
-                  # 2. AI 生成描述 (仅针对新照片)
+                  # 2. AI 生成描述 (结合文件名和视觉内容)
                   if filename not in descriptions:
                       try:
-                          response = model.generate_content(["这张图是一个摄影网站的作品，请给它写一句15字以内的感性中文描述，只要纯文字，不要符号。", img])
+                          # 提取不带后缀的文件名
+                          display_name = os.path.splitext(filename)[0]
+                          
+                          # 优化后的 Prompt：要求结合文件名，增加文采
+                          prompt = f"""
+                          你是一位富有诗意的摄影评论家。
+                          这张摄影作品的文件名是：'{display_name}'。
+                          请结合这张图片的视觉内容和文件名，写一句20字以内、极具文学色彩的中文描述。
+                          要求：语言优美，意境深远，不要重复文件名，直接返回描述文字。
+                          """
+                          
+                          response = model.generate_content([prompt, img])
                           descriptions[filename] = response.text.strip()
                           processed_any = True
                       except Exception as e:
                           print(f"AI Error for {filename}: {e}")
-                          descriptions[filename] = "光影流转的瞬间"
+                          descriptions[filename] = "光影交织出的无声诗篇。"
 
           if processed_any:
               with open(data_file, 'w', encoding='utf-8') as f:
