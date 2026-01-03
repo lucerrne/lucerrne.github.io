@@ -1,4 +1,38 @@
-- name: Run AI & Compression
+name: AI Photo Assistant & Auto Deploy
+
+on:
+  push:
+    paths:
+      - 'assets/photos/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install Pillow pyyaml requests # 换成最基础的请求库
+
+      - name: Run AI & Compression
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -17,8 +51,7 @@
               print(f"❌ 探测模型失败: {e}")
 
           # 2. 核心 API 地址 (确保使用 v1 正式版)
-          # 注意：如果下面仍然 404，请根据上面打印出来的列表修改这里的 gemini-1.5-flash
-          # 将 gemini-1.5-flash 改为 gemini-2.5-flash
+          # gemini2.5版本
           api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
@@ -71,3 +104,28 @@
               with open(data_file, 'w', encoding='utf-8') as f:
                   yaml.dump(descriptions, f, allow_unicode=True)
           EOF
+
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update descriptions" && git push)
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
