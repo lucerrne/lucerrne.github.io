@@ -103,13 +103,26 @@ jobs:
                       with open(img_path, "rb") as image_file:
                           encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
+                     # 优化后的 Prompt
+                      system_prompt = (
+                          "你是一位专业的摄影评论家。请用一句话描述这张作品的意境。"
+                          "要求：1. 语言感性且富有诗意；2. 禁止使用任何特殊符号（如星号*、井号#、括号等）；"
+                          "3. 词汇要丰富多样，避免使用‘这张照片展示了’、‘意境深远’、‘美丽’等陈词滥调；"
+                          "4. 直接输出文案内容，不要解释。"
+                      )
+
                       payload = {
                           "contents": [{
                               "parts": [
-                                  {"text": "请用一句话描述这张摄影作品的意境，中文，感性且有诗意。"},
+                                  {"text": system_prompt},
                                   {"inline_data": {"mime_type": "image/webp", "data": encoded_string}}
                               ]
-                          }]
+                          }],
+                          "generationConfig": {
+                              "temperature": 0.8,  # 提高随机性，让词汇更丰富
+                              "topP": 0.95,
+                              "maxOutputTokens": 100
+                          }
                       }
                       
                       response = requests.post(api_url, json=payload)
