@@ -2,19 +2,61 @@
 layout: default
 ---
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <title>我的摄影集</title>
     <style>
-        /* 基础样式 */
+        /* =========================================
+           1. 宇宙启动屏样式 (Splash Screen)
+           ========================================= */
+        #splash-screen {
+            position: fixed;
+            top: 0; left: 0; 
+            width: 100%; height: 100%;
+            background: #000;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #star-canvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%;
+        }
+
+        .welcome-text {
+            position: relative;
+            z-index: 10001;
+            color: white;
+            font-family: -apple-system, "PingFang SC", sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 0.6rem;
+            font-weight: 200;
+            text-shadow: 0 0 15px rgba(255,255,255,0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        /* =========================================
+           2. 摄影集基础样式
+           ========================================= */
         body { 
             font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; 
             background: #f0f0f0; 
             margin: 0; 
+            /* 动画结束前禁止滚动 */
+            overflow: hidden; 
         }
         
-        /* 标题部分 */
         h1 { 
             margin-top: 60px; 
             letter-spacing: 8px; 
@@ -22,6 +64,7 @@ layout: default
             font-weight: 300;
             color: #222;
         }
+
         .subtitle {
             text-align: center;
             color: #888;
@@ -30,7 +73,6 @@ layout: default
             margin-bottom: 40px;
         }
 
-        /* 网格布局 */
         .grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
@@ -38,19 +80,35 @@ layout: default
             padding: 0 40px 60px 40px; 
         }
 
-        /* 卡片设计 */
+        /* =========================================
+           3. 卡片入场动效样式
+           ========================================= */
         .card { 
             background: white; 
             border-radius: 12px; 
             overflow: hidden; 
             box-shadow: 0 15px 30px rgba(0,0,0,0.05); 
-            transition: transform 0.3s ease; 
-        }
-        .card:hover { 
-            transform: translateY(-8px); 
+            
+            /* 初始状态：透明并下移 */
+            opacity: 0;
+            transform: translateY(40px);
+            
+            /* 这里的 transition 用于入场后的 hover 效果 */
+            transition: transform 0.4s ease, box-shadow 0.4s ease; 
         }
 
-        /* 图片处理 */
+        /* 入场激活状态 */
+        .card.show {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 1s ease, transform 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .card:hover { 
+            transform: translateY(-10px); 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
         img { 
             width: 100%; 
             height: 260px; 
@@ -58,14 +116,13 @@ layout: default
             display: block; 
         }
 
-        /* 文案居中区域 */
         .info { 
             padding: 25px 20px; 
             color: #444; 
             font-size: 15px; 
             line-height: 1.6;
-            text-align: center; /* 核心：文字水平居中 */
-            min-height: 24px;   /* 保持高度对齐 */
+            text-align: center;
+            min-height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -74,31 +131,115 @@ layout: default
     </style>
 </head>
 <body>
-    <h1>PHOTOGRAPHY</h1>
-    <p class="subtitle">—— 瞬间即是永恒 ——</p>
 
-    <div class="grid">
-        {% for file in site.static_files %}
-            {% if file.path contains '/assets/photos/' %}
-                <div class="card">
-                    <img src="{{ file.path | relative_url }}">
-                    <div class="info">
-                        {% assign photo_name = file.path | split: "/" | last %}
-                        {% assign desc = site.data.descriptions[photo_name] %}
-                        
-                        {% if desc %}
-                            {% if desc.zh %}
-                                {{ desc.zh }}
-                            {% else %}
-                                {{ desc }}
-                            {% endif %}
-                        {% else %}
-                            <span style="color: #bbb;">正在感悟这张照片...</span>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
-        {% endfor %}
+    <div id="splash-screen">
+        <canvas id="star-canvas"></canvas>
+        <div class="welcome-text">正在跨越星系...</div>
     </div>
+
+    <div id="page-content">
+        <h1>PHOTOGRAPHY</h1>
+        <p class="subtitle">—— 瞬间即是永恒 ——</p>
+
+        <div class="grid">
+            {% for file in site.static_files %}
+                {% if file.path contains '/assets/photos/' %}
+                    <div class="card">
+                        <img src="{{ file.path | relative_url }}">
+                        <div class="info">
+                            {% assign photo_name = file.path | split: "/" | last %}
+                            {% assign desc = site.data.descriptions[photo_name] %}
+                            
+                            {% if desc %}
+                                {% if desc.zh %}
+                                    {{ desc.zh }}
+                                {% else %}
+                                    {{ desc }}
+                                {% endif %}
+                            {% else %}
+                                <span style="color: #bbb;">正在感悟这张照片...</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        // --- Part 1: Canvas 宇宙动画逻辑 ---
+        const canvas = document.getElementById('star-canvas');
+        const ctx = canvas.getContext('2d');
+        let w, h, stars = [];
+        
+        function initCanvas() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+            stars = [];
+            for (let i = 0; i < 400; i++) {
+                stars.push({
+                    x: Math.random() * w - w / 2,
+                    y: Math.random() * h - h / 2,
+                    z: Math.random() * w
+                });
+            }
+        }
+
+        function drawStars() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+            ctx.fillRect(0, 0, w, h);
+            ctx.save();
+            ctx.translate(w / 2, h / 2);
+
+            stars.forEach(s => {
+                s.z -= 12; // 飞行速度
+                if (s.z <= 0) s.z = w;
+
+                const x = s.x / (s.z / w);
+                const y = s.y / (s.z / w);
+                const size = (1 - s.z / w) * 2.5;
+
+                ctx.beginPath();
+                ctx.fillStyle = `rgba(255, 255, 255, ${1 - s.z / w})`;
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+            this.animationFrame = requestAnimationFrame(drawStars);
+        }
+
+        window.addEventListener('resize', initCanvas);
+        initCanvas();
+        drawStars();
+
+        // --- Part 2: 控制逻辑 ---
+        window.addEventListener('load', () => {
+            // 1. 停留 3 秒后开始切换
+            setTimeout(() => {
+                const splash = document.getElementById('splash-screen');
+                const cards = document.querySelectorAll('.card');
+                
+                // 2. 隐藏遮罩层
+                splash.style.opacity = '0';
+                
+                // 3. 恢复页面滚动
+                document.body.style.overflow = 'auto';
+
+                // 4. 瀑布式触发卡片入场
+                cards.forEach((card, index) => {
+                    setTimeout(() => {
+                        card.classList.add('show');
+                    }, 150 * index); // 每张卡片间隔 150ms 出现
+                });
+                
+                // 5. 彻底移除动画 DOM 节省性能
+                setTimeout(() => {
+                    cancelAnimationFrame(this.animationFrame);
+                    splash.remove();
+                }, 1500); 
+
+            }, 3000);
+        });
+    </script>
 </body>
 </html>
