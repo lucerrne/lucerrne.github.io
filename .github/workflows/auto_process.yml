@@ -30,9 +30,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
-        run: pip install Pillow pyyaml requests # 换成最基础的请求库
+        run: pip install Pillow pyyaml requests
 
-      - name: Run AI & Compression
+      - name: Run AI & Smart Compression
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -41,17 +41,6 @@ jobs:
           from PIL import Image
 
           api_key = os.environ['GEMINI_API_KEY']
-          
-          # 1. 先探测你的 Key 到底能看到哪些模型 (用于排查 404)
-          list_url = f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
-          try:
-              models_resp = requests.get(list_url).json()
-              print(f"🔍 当前 Key 可用的模型列表: {models_resp}")
-          except Exception as e:
-              print(f"❌ 探测模型失败: {e}")
-
-          # 2. 核心 API 地址 (确保使用 v1 正式版)
-          # gemini2.5版本
           api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
@@ -71,8 +60,22 @@ jobs:
                   try:
                       img_path = os.path.join(photo_dir, filename)
                       img = Image.open(img_path)
-                      img.save(img_path, optimize=True, quality=80)
                       
+                      # --- 关键：入场前的自动压缩与尺寸优化 ---
+                      # 1. 限制最大宽度为 1920px (兼顾画质与速度)
+                      if img.width > 1920:
+                          ratio = 1920 / float(img.width)
+                          new_h = int(float(img.height) * float(ratio))
+                          img = img.resize((1920, new_h), Image.Resampling.LANCZOS)
+                      
+                      # 2. 统一转为 RGB 避免报错
+                      if img.mode in ("RGBA", "P"):
+                          img = img.convert("RGB")
+                      
+                      # 3. 深度压缩保存
+                      img.save(img_path, "JPEG", optimize=True, quality=75)
+                      # ---------------------------------------
+
                       with open(img_path, "rb") as image_file:
                           encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
@@ -90,15 +93,14 @@ jobs:
                       
                       if 'candidates' in result:
                           descriptions[filename] = result['candidates'][0]['content']['parts'][0]['text'].strip()
-                          print(f"✅ 成功生成描述: {filename}")
+                          print(f"✅ 处理并压缩成功: {filename}")
                           processed_any = True
                       else:
-                          # 这里会打印出最详细的错误原因
-                          print(f"❌ API 报错详情: {result}")
+                          print(f"❌ API 报错: {result}")
                       
-                      time.sleep(3)
+                      time.sleep(2) # 稍微加快频率
                   except Exception as e:
-                      print(f"❌ 程序执行错误 {filename}: {e}")
+                      print(f"❌ 错误 {filename}: {e}")
 
           if processed_any:
               with open(data_file, 'w', encoding='utf-8') as f:
@@ -110,7 +112,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git diff --quiet && git diff --staged --quiet || (git commit -m "AI: Update descriptions" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: optimize images and updates [skip ci]" && git push)
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
