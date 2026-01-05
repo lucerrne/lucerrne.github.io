@@ -39,19 +39,20 @@ jobs:
           python <<EOF
           import os, base64, requests, yaml, time, random
           from PIL import Image, ImageDraw, ImageFont
-          from datetime import datetime
+          from datetime import datetime, timedelta, timezone
 
           api_key = os.environ['GEMINI_API_KEY']
-          # 严格保持你提供的 API URL 版本
+          # 保持原版本 API URL
           api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
 
           photo_dir = 'assets/photos'
           data_file = '_data/descriptions.yml'
           
-          # 自定义名字
-          my_name = "@Lucerrne's Photo"
-          # 获取当前时间
-          current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+          # 1. 修正时区：获取北京时间 (UTC+8)
+          tz_bj = timezone(timedelta(hours=8))
+          current_time = datetime.now(tz_bj).strftime("%Y-%m-%d %H:%M")
+          
+          my_name = "@lucerrne"
           watermark_text = f"{my_name} | {current_time}"
           
           if os.path.exists(data_file):
@@ -61,67 +62,63 @@ jobs:
               descriptions = {}
 
           os.makedirs('_data', exist_ok=True)
-          processed_any = False
+          # 只要脚本运行，我们就默认它会有改动，确保 Git 会提交
+          processed_any = True 
 
-          # 遍历文件夹
+          # 强制处理文件夹下所有图片
           for filename in os.listdir(photo_dir):
-              # 修改逻辑：只要是图片就处理，不再检查是否在 descriptions 中，实现强制重写
+              # 只要是图片格式就处理，不再判断是否在 descriptions 列表里
               if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
                   try:
                       img_path = os.path.join(photo_dir, filename)
                       img = Image.open(img_path)
                       
-                      # 1. 彻底清除 EXIF (通过重新创建 RGB 图像实现)
+                      # A. 彻底重构图像以清除 EXIF 和旧数据
                       clean_img = Image.new("RGB", img.size)
                       if img.mode == "RGBA":
                           clean_img.paste(img, (0, 0), img)
                       else:
                           clean_img.paste(img, (0, 0))
                       
-                      # 2. 智能缩放 (限制宽度 1920px，保持 75% 压缩质量)
+                      # B. 强制缩放与质量控制 (1920px, 75%)
                       if clean_img.width > 1920:
                           ratio = 1920 / float(clean_img.width)
                           new_h = int(float(clean_img.height) * float(ratio))
                           clean_img = clean_img.resize((1920, new_h), Image.Resampling.LANCZOS)
                       
-                      # 3. 添加动态随机位置水印
+                      # C. 随机位置北京时间水印
                       draw = ImageDraw.Draw(clean_img)
-                      font_size = int(clean_img.width * 0.018) # 自适应字号
+                      font_size = int(clean_img.width * 0.018)
                       try:
                           font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
                       except:
                           font = ImageFont.load_default()
                       
-                      # 计算文案尺寸
                       text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
                       tw, th = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
                       margin = 35
                       
-                      # 随机四个角落
                       positions = [
-                          (margin, margin),                                      # 左上
-                          (clean_img.width - tw - margin, margin),               # 右上
-                          (margin, clean_img.height - th - margin),              # 左下
-                          (clean_img.width - tw - margin, clean_img.height - th - margin) # 右下
+                          (margin, margin),
+                          (clean_img.width - tw - margin, margin),
+                          (margin, clean_img.height - th - margin),
+                          (clean_img.width - tw - margin, clean_img.height - th - margin)
                       ]
                       x, y = random.choice(positions)
-                      
-                      # 绘制半透明白色文字 (128 为半透明)
                       draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255, 128))
 
-                      # 4. 强制覆盖保存 (WebP 格式，保持原文件名后缀)
+                      # D. 强制覆盖保存 (WebP 编码)
                       clean_img.save(img_path, "WebP", quality=75, optimize=True)
-                      print(f"✅ 强制处理成功 (已压缩+随机水印): {filename}")
+                      print(f"🔥 强制重处理完成: {filename} (北京时间: {current_time})")
 
-                      # 5. 调用 AI 生成文案
+                      # E. 调用 AI 重新生成文案 (为了多样性，每次都重新生成)
                       with open(img_path, "rb") as image_file:
                           encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
                       system_prompt = (
                           "你是一位专业的摄影评论家。请用一句话描述这张作品的意境。"
-                          "要求：1. 语言感性且富有诗意；2. 禁止使用任何特殊符号（如星号*、井号#、括号等）；"
-                          "3. 词汇要丰富多样，避免使用陈词滥调；"
-                          "4. 直接输出文案内容，不要解释。"
+                          "要求：1. 语言感性且富有诗意；2. 禁止使用任何特殊符号；"
+                          "3.输出大概15-20字左右文案，尽量有诗意。"
                       )
 
                       payload = {
@@ -131,26 +128,17 @@ jobs:
                                   {"inline_data": {"mime_type": "image/webp", "data": encoded_string}}
                               ]
                           }],
-                          "generationConfig": {
-                              "temperature": 0.8,
-                              "topP": 0.95,
-                              "maxOutputTokens": 100
-                          }
+                          "generationConfig": {"temperature": 0.8}
                       }
                       
                       response = requests.post(api_url, json=payload)
                       result = response.json()
-                      
                       if 'candidates' in result:
                           descriptions[filename] = result['candidates'][0]['content']['parts'][0]['text'].strip()
-                          print(f"📝 文案已更新: {filename}")
-                          processed_any = True
-                      else:
-                          print(f"❌ API 报错详情: {result}")
                       
                       time.sleep(2)
                   except Exception as e:
-                      print(f"❌ 错误 {filename}: {e}")
+                      print(f"❌ 强制处理失败 {filename}: {e}")
 
           if processed_any:
               with open(data_file, 'w', encoding='utf-8') as f:
